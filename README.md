@@ -12,3 +12,11 @@ It's support
 The value of time will be initialzed by the first call to any function above.
 The loggic is quite simple. You can look at the code yourself.
 PR is welcomed.
+
+## Usage
+
+Compile by yourself
+```
+g++ -fPIC -shared -o libfreezetime.so ./freezetime.cc -ldl
+```
+or just download a piece from [release](https://github.com/JPewterschmidt/freezetime/releases) page.
