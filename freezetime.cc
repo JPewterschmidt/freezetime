@@ -32,50 +32,54 @@ namespace
     {
         return ::dlsym(h.get(), name);
     }
-}
 
-
-static void init()
-{
-    handle_t handle = open_libc();
-    if (!handle) return;
-
-    // libc `time()` 
-    auto libc_clock_gettime = (int (*) (clock_t, ::timespec*))get_func(handle, "clock_gettime");
-    if (!libc_clock_gettime) return;
-    
-    libc_clock_gettime(CLOCK_REALTIME, &s_ts);
-
-    ::Dl_info dl_info{};
-    // Get current shared object name.
-    if (::dladdr((void*)&init, &dl_info))
+    void init_impl()
     {
-        s_myname = dl_info.dli_fname;
+        handle_t handle = open_libc();
+        if (!handle) return;
+
+        // libc `time()` 
+        auto libc_clock_gettime = (int (*) (clock_t, ::timespec*))get_func(handle, "clock_gettime");
+        if (!libc_clock_gettime) return;
+        
+        libc_clock_gettime(CLOCK_REALTIME, &s_ts);
+
+        ::Dl_info dl_info{};
+        // Get current shared object name.
+        if (::dladdr((void*)&init_impl, &dl_info))
+        {
+            s_myname = dl_info.dli_fname;
+        }
+
+        auto libc_times = (clock_t (*) (::tms*))get_func(handle, "times");
+        if (!libc_times) return;
+        
+        s_times_result = libc_times(&s_times_time);   
     }
 
-    auto libc_times = (clock_t (*) (::tms*))get_func(handle, "times");
-    if (!libc_times) return;
-    
-    s_times_result = libc_times(&s_times_time);   
-}
+    void init()
+    {
+        ::std::call_once(s_once_flag, init);
+    }
 
-static ::timespec time_to_timespec(time_t t)
-{
-    return { .tv_sec = t };
+    ::timespec time_to_timespec(time_t t)
+    {
+        return { .tv_sec = t };
+    }
 }
 
 // Hooks ------------------------------------------------------------------------
 
 time_t time(time_t* tloc)
 {
-    /*XXX init*/ ::std::call_once(s_once_flag, init);
+    init();
     if (tloc) *tloc = s_ts.tv_sec;
     return s_ts.tv_sec;
 }
 
 int clock_gettime(::clockid_t clkid, ::timespec* tp)
 {
-    /*XXX init*/ ::std::call_once(s_once_flag, init);
+    init();
     switch (clkid)
     {
         case CLOCK_REALTIME:
@@ -100,21 +104,21 @@ int clock_gettime(::clockid_t clkid, ::timespec* tp)
 
 int ftime(::timeb* tp)
 {
-    /*XXX init*/ ::std::call_once(s_once_flag, init);
+    init();
     if (tp) *tp = { .time = s_ts.tv_sec, .millitm = static_cast<unsigned short>(s_ts.tv_nsec / 1'000'000) };
     return 0;
 }
 
 int gettimeofday(::timeval* tv, [[maybe_unused]] void* /*::timezone* */)
 {
-    /*XXX init*/ ::std::call_once(s_once_flag, init);
+    init();
     if (tv) *tv = { .tv_sec = s_ts.tv_sec, .tv_usec = s_ts.tv_nsec / 1000 };
     return 0;
 }
 
 ::clock_t times(::tms* buf)
 {
-    /*XXX init*/ ::std::call_once(s_once_flag, init);
+    init();
     if (buf) *buf = s_times_time;
     return s_times_result;
 }
